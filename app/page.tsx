@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import type { DataConnection, Peer } from "peerjs";
 import { createHost, connectArena, type NetMessage } from "./network";
+import { audio } from "./audio";
 import {
   dropPiece,
   flowNodes,
@@ -110,6 +111,7 @@ export default function App() {
   };
   return (
     <>
+      <SoundControl />
       {view === "home" && (
         <Home
           teacher={() => navigate("teacher")}
@@ -121,6 +123,23 @@ export default function App() {
       {view === "arena" && <ArenaClient back={() => navigate("home")} />}{" "}
       {manual && <Manual close={() => setManual(false)} />}
     </>
+  );
+}
+function SoundControl() {
+  const [enabled, setEnabled] = useState(() => audio.isEnabled());
+  return (
+    <button
+      className={`sound-control ${enabled ? "on" : ""}`}
+      onClick={async () => {
+        const next = !enabled;
+        setEnabled(next);
+        await audio.setEnabled(next);
+        if (next) audio.tone("click");
+      }}
+      aria-label={enabled ? "배경음과 효과음 끄기" : "배경음과 효과음 켜기"}
+    >
+      <span>{enabled ? "♫" : "♪"}</span> SOUND {enabled ? "ON" : "OFF"}
+    </button>
   );
 }
 function Home({
@@ -179,9 +198,7 @@ function Home({
 function Logo() {
   return (
     <div className="brand">
-      <span className="brand-mark">
-        十<br />二
-      </span>
+      <span className="brand-mark"><img src="/images/branding/emblem_twelve.png" alt="" /></span>
       <span>
         TWELVE
         <br />
@@ -198,6 +215,7 @@ function Teacher({ back }: { back: () => void }) {
   const [bulk, setBulk] = useState("");
   const [remaining, setRemaining] = useState(0);
   const [qr, setQr] = useState("");
+  const [showResults, setShowResults] = useState(false);
   const peer = useRef<Peer | null>(null),
     conns = useRef(new Map<string, DataConnection>()),
     sessionRef = useRef<Session | null>(null);
@@ -592,6 +610,13 @@ function Teacher({ back }: { back: () => void }) {
         <div>
           <small>MATCH RESULTS</small>
           <h2>{session.matches.length}경기 완료</h2>
+          <button
+            className="result-reveal"
+            disabled={!session.matches.length}
+            onClick={() => setShowResults(true)}
+          >
+            결과 공개
+          </button>
         </div>
         {session.matches
           .slice(-5)
@@ -612,7 +637,31 @@ function Teacher({ back }: { back: () => void }) {
             </div>
           ))}
       </section>
+      {showResults && (
+        <ResultsOverlay players={session.players} close={() => setShowResults(false)} />
+      )}
     </main>
+  );
+}
+function ResultsOverlay({ players, close }: { players: Player[]; close: () => void }) {
+  const ranked = [...players].sort((a, b) => b.score - a.score || b.win - a.win || a.name.localeCompare(b.name));
+  const podium = [ranked[1], ranked[0], ranked[2]];
+  return (
+    <div className="results-screen">
+      <button className="results-close" onClick={close} aria-label="결과 화면 닫기">×</button>
+      <div className="results-title"><small>CLASSROOM FINAL RANKING</small><h2>오늘의 알고리즘 마스터</h2></div>
+      <div className="podium">
+        {podium.map((player, i) => player && (
+          <article className={`rank r${[2, 1, 3][i]}`} key={player.id}>
+            <img src={`/images/ranks/medal_rank_${[2, 1, 3][i]}.png`} alt={`${[2, 1, 3][i]}위 메달`} />
+            <h3>{player.name}</h3><p>{player.win}승 · {player.score}점</p>
+          </article>
+        ))}
+      </div>
+      <div className="leaderboard">
+        {ranked.slice(0, 8).map((p, i) => <div key={p.id}><strong>{i + 1}</strong><span>{p.name}</span><small>{p.games}경기 · {p.win}승</small><b>{p.score}점</b></div>)}
+      </div>
+    </div>
   );
 }
 function safeSession(s: Session) {
@@ -683,6 +732,7 @@ function ArenaClient({ back }: { back: () => void }) {
         if (d.type === "MATCH_APPROVED") {
           const m = d.match as { matchId: string };
           const g = newGame(m.matchId);
+          audio.cue("start");
           setGame(g);
         }
         if (d.type === "RESULT_ACCEPTED") {
@@ -905,16 +955,28 @@ function GameBoard({
   function tap(i: number) {
     const p = game.board[i];
     if (selected !== null && legal.includes(i)) {
-      setGame(movePiece(game, selected, i));
+      const before = game.board[selected];
+      const next = movePiece(game, selected, i);
+      audio.tone(p ? "capture" : "move");
+      if (before && next.board[i]?.kind !== before.kind) audio.cue("promote");
+      if (next.winner !== null) audio.cue("victory");
+      setGame(next);
       setSelected(null);
     } else if (prisoner !== null && legal.includes(i)) {
-      setGame(dropPiece(game, prisoner, i));
+      const next = dropPiece(game, prisoner, i);
+      audio.tone("move");
+      if (next.winner !== null) audio.cue("victory");
+      setGame(next);
       setPrisoner(null);
-    } else if (p?.owner === game.turn) setSelected(i);
+    } else if (p?.owner === game.turn) {
+      audio.tone("select");
+      setSelected(i);
+    }
   }
   function saveFlow(side: Side) {
     const events = game.lastEvents[side];
     if (!events.length) return;
+    audio.tone("save");
     setGame({
       ...game,
       saved: [
