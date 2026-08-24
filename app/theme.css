@@ -11,10 +11,12 @@ button:disabled { cursor: not-allowed; }
 .sound-control {
   position: fixed; right: 18px; bottom: 18px; z-index: 60;
   border: 1px solid rgba(142, 172, 184, .42); background: rgba(6, 20, 29, .82);
-  color: #93a9b3; padding: 9px 12px; font: 700 9px monospace; letter-spacing: .12em;
+  color: #dce8eb; padding: 8px 11px; font: 700 10px monospace; letter-spacing: .12em;
   backdrop-filter: blur(12px); box-shadow: 0 8px 30px #0014;
+  display: flex; align-items: center; gap: 10px;
 }
-.sound-control span { color: var(--amber); margin-right: 5px; }
+.sound-control button { width: 31px; height: 31px; border: 1px solid #00d7ff88; border-radius: 50%; background: #0b2a38; color: white; font-size: 12px; }
+.sound-control input { width: 110px; accent-color: var(--cyan); }
 .sound-control.on { color: white; border-color: rgba(0, 215, 255, .65); }
 
 .brand-mark { width: 51px; height: 51px; padding: 0 !important; background: #07131d !important; overflow: hidden; }
@@ -31,11 +33,18 @@ button:disabled { cursor: not-allowed; }
 .landing .hero { max-width: 660px; }
 .landing .hero h1 { text-wrap: balance; text-shadow: 0 2px 0 rgba(255,255,255,.55); }
 .landing .hero p { color: #465d67; font-weight: 550; }
+.landing .brand { max-width: 360px; letter-spacing: -.01em; font-size: 18px; }
+.landing .brand-mark { flex: 0 0 51px; }
 .landing .board-art { right: 3vw; top: 12vh; width: 43vw; pointer-events: none; }
 .landing .mini-board, .landing .halo { display: none; }
 .landing .flow-chip { background: rgba(7,28,40,.86); backdrop-filter: blur(12px); }
 .landing .chip-one { left: 1%; top: 32%; }
 .landing .chip-two { right: 1%; bottom: 13%; }
+.landing .status { display: grid; gap: 8px; letter-spacing: 0; }
+.landing .status strong { color: #263d47; font-size: 14px; }
+.landing .status small { color: #687b82; font: 600 12px/1.5 inherit; }
+.landing .actions { flex-wrap: wrap; }
+.landing .practice-button { border-color: #d4952d !important; color: #805313; background: rgba(255,247,225,.65); }
 
 .dashboard {
   color: #0a202b;
@@ -46,7 +55,7 @@ button:disabled { cursor: not-allowed; }
 .dashboard header { border-color: rgba(12,45,58,.17); }
 .dashboard .ghost { color: #264653; border-color: #9faead; background: rgba(255,255,255,.4); }
 .dashboard .teacher-bar > div, .dashboard .panel, .dashboard .match-strip > div:not(:first-child) {
-  background: var(--glass-light); border: 1px solid var(--line-light);
+  background: var(--glass-light); border: 2px solid rgba(31,74,86,.24);
   box-shadow: 0 18px 45px rgba(26,52,58,.08); backdrop-filter: blur(13px);
 }
 .dashboard .teacher-bar > div:first-child small, .dashboard .timer-display small, .dashboard .panel small { color: #008ea8; }
@@ -63,6 +72,31 @@ button:disabled { cursor: not-allowed; }
 .dashboard .empty { color: #6b7d82; }
 .result-reveal { margin-top: 10px; border: 0; padding: 9px 12px; background: #071d29; color: white; font-weight: 800; }
 .result-reveal:disabled { opacity: .35; }
+
+.join-screen { position: relative; padding: 42px; }
+.join-card-large { width: min(1180px, 94vw); min-height: min(760px, 88vh); padding: clamp(48px, 6vw, 78px); display: flex; flex-direction: column; justify-content: center; }
+.join-card-large > .brand { position: absolute; top: 42px; left: 52px; margin: 0; }
+.join-card-large:has(.corner-back) > .brand { top: 86px; }
+.join-card-large h1 { margin: 30px 0 50px; line-height: 1.35; }
+.join-card-large > input { margin-bottom: 26px; }
+.join-options { flex-wrap: wrap; }
+.join-options .primary, .connect-button { background: #00cbe9; color: #06131d; border: 2px solid #a7f4ff !important; box-shadow: 0 7px 0 #07596a, 0 14px 30px #0018; }
+.restore-help { flex: 1 1 280px; max-width: 390px; margin: 0; padding: 13px 16px; border-left: 3px solid #ffbd4d; background: #152b36; color: #c6d3d8; font-size: 12px; line-height: 1.65; }
+.corner-back, .join-card-large .corner-back { position: absolute !important; top: 24px; left: 28px; z-index: 5; margin: 0 !important; padding: 11px 15px !important; color: white !important; background: rgba(7,25,36,.86) !important; border: 1px solid #56717c !important; }
+.arena-number-row { display: flex; align-items: center; gap: 26px; margin: 8px 0 24px; }
+.arena-number-row .arena-numbers { flex: 0 0 auto; grid-template-columns: repeat(8, 54px); margin: 0; }
+.arena-number-help { max-width: 330px; padding: 16px; margin: 0; color: #ffe1a1 !important; background: #352a1c; border: 1px solid #9e7838; font-size: 12px; line-height: 1.7; }
+.practice-names { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; max-width: 760px; margin-bottom: 38px; }
+.practice-names input { min-width: 0; padding: 18px; background: #07131d; color: white; border: 1px solid #426271; font-size: 20px; }
+.practice-names b { color: var(--amber); }
+.practice-card .connect-button { width: fit-content; padding: 18px 34px; }
+
+.qr-zoom-button { display: block; width: 226px; margin: 20px auto 12px; padding: 8px; background: white; border: 2px solid #58727b; }
+.qr-panel .qr-zoom-button img { display: block; width: 100%; margin: 0; border: 0; }
+.qr-lightbox { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; align-content: center; gap: 14px; background: rgba(2,10,16,.9); backdrop-filter: blur(10px); }
+.qr-lightbox img { width: min(620px, 76vh, 86vw); border: 18px solid white; }
+.qr-lightbox b { color: white; font: 700 36px monospace; letter-spacing: .2em; }
+.qr-lightbox button { position: fixed; top: 22px; right: 26px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #fff8; color: white; background: #102631; font-size: 26px; }
 
 .game {
   background:
@@ -107,4 +141,7 @@ button:disabled { cursor: not-allowed; }
   .landing .board-art { opacity: .72; right: -8vw; }
   .game-layout { grid-template-columns: minmax(165px, 23%) minmax(330px, 54%) minmax(165px, 23%); }
   .results-screen .rank { padding: 10px; min-height: 210px; }
+  .arena-number-row { align-items: stretch; flex-direction: column; }
+  .arena-number-row .arena-numbers { grid-template-columns: repeat(8, 44px); }
+  .arena-number-help { max-width: none; }
 }

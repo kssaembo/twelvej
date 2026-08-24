@@ -10,15 +10,25 @@ class AudioDirector {
   private context: AudioContext | null = null;
   private bgm: HTMLAudioElement | null = null;
   private enabled = false;
+  private volume = 0.16;
 
   constructor() {
     if (typeof window !== "undefined") {
       this.enabled = localStorage.getItem("twelve-sound") === "on";
+      this.volume = Number(localStorage.getItem("twelve-volume") || 0.16);
     }
   }
 
   isEnabled() {
     return this.enabled;
+  }
+
+  getVolume() { return this.volume; }
+
+  setVolume(volume: number) {
+    this.volume = Math.max(0, Math.min(1, volume));
+    localStorage.setItem("twelve-volume", String(this.volume));
+    if (this.bgm) this.bgm.volume = this.volume;
   }
 
   async setEnabled(enabled: boolean) {
@@ -30,7 +40,7 @@ class AudioDirector {
     }
     this.bgm ??= Object.assign(new Audio("/audio/bgm/bgm_class_arena.mp3"), {
       loop: true,
-      volume: 0.16,
+      volume: this.volume,
     });
     try {
       await this.bgm.play();

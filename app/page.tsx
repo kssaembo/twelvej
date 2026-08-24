@@ -74,9 +74,7 @@ const makeCode = () => String(Math.floor(1000 + Math.random() * 9000));
 const blankSession = (code = makeCode()): Session => ({
   code,
   title: "우리 반 십이장기",
-  players: ["김하늘", "이도윤", "박서윤", "최민준", "정지우", "한예준"].map(
-    emptyPlayer,
-  ),
+  players: [],
   arenas: {},
   matches: [],
   active: {},
@@ -91,12 +89,9 @@ export default function App() {
     typeof location !== "undefined"
       ? new URLSearchParams(location.search)
       : null;
-  const initial =
-    params?.get("mode") === "arena"
-      ? "arena"
-      : params?.get("mode") === "teacher"
-        ? "teacher"
-        : "home";
+  const initial = ["arena", "teacher", "practice"].includes(params?.get("mode") || "")
+    ? params!.get("mode")!
+    : "home";
   const [view, setView] = useState(initial);
   const [manual, setManual] = useState(false);
   const navigate = (v: string, code?: string) => {
@@ -111,60 +106,54 @@ export default function App() {
   };
   return (
     <>
-      <SoundControl />
       {view === "home" && (
         <Home
           teacher={() => navigate("teacher")}
           arena={() => navigate("arena")}
+          practice={() => navigate("practice")}
           manual={() => setManual(true)}
         />
       )}{" "}
       {view === "teacher" && <Teacher back={() => navigate("home")} />}{" "}
       {view === "arena" && <ArenaClient back={() => navigate("home")} />}{" "}
+      {view === "practice" && <Practice back={() => navigate("home")} />}{" "}
       {manual && <Manual close={() => setManual(false)} />}
     </>
   );
 }
 function SoundControl() {
   const [enabled, setEnabled] = useState(() => audio.isEnabled());
+  const [volume, setVolume] = useState(() => audio.getVolume());
   return (
-    <button
-      className={`sound-control ${enabled ? "on" : ""}`}
-      onClick={async () => {
-        const next = !enabled;
-        setEnabled(next);
-        await audio.setEnabled(next);
-        if (next) audio.tone("click");
-      }}
-      aria-label={enabled ? "배경음과 효과음 끄기" : "배경음과 효과음 켜기"}
-    >
-      <span>{enabled ? "♫" : "♪"}</span> SOUND {enabled ? "ON" : "OFF"}
-    </button>
+    <div className={`sound-control ${enabled ? "on" : ""}`}>
+      <button onClick={async () => { const next = !enabled; setEnabled(next); await audio.setEnabled(next); }} aria-label={enabled ? "BGM 일시정지" : "BGM 재생"}>{enabled ? "Ⅱ" : "▶"}</button>
+      <b>BGM</b>
+      <input aria-label="BGM 음량" type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => { const next = Number(e.target.value); setVolume(next); audio.setVolume(next); }} />
+    </div>
   );
 }
 function Home({
   teacher,
   arena,
+  practice,
   manual,
 }: {
   teacher: () => void;
   arena: () => void;
+  practice: () => void;
   manual: () => void;
 }) {
   return (
     <main className="landing">
       <nav>
-        <Logo />
-        <button className="guide" onClick={manual}>
-          게임 가이드 ↗
-        </button>
+        <Logo home />
       </nav>
       <section className="hero">
-        <div className="eyebrow">CLASSROOM STRATEGY · WEBRTC</div>
+        <div className="eyebrow">지니어스 게임을 학급에서 즐겁게 해보세요</div>
         <h1>
-          생각의 수를
+          전략 게임
           <br />
-          <em>눈에 보이게.</em>
+          <em>십이장기</em>
         </h1>
         <p>
           한 수 한 수가 알고리즘이 되는 전략 보드게임.
@@ -176,36 +165,38 @@ function Home({
             교사 운영 페이지 <b>→</b>
           </button>
           <button className="secondary" onClick={arena}>
-            경기장 접속
+            학생 경기장 접속
           </button>
+          <button className="secondary practice-button" onClick={practice}>연습경기</button>
           <button className="secondary" onClick={manual}>
             설명서
           </button>
         </div>
         <div className="status">
-          <span>●</span> BACKENDLESS CLASSROOM <i /> 4-DIGIT CODE <i /> AUTO
-          RECOVERY
+          <strong>5학년 실과 컴퓨터와 문제 해결</strong>
+          <small>5,6학년 실과 컴퓨터 단원, 창체 학급 놀이, 문제 해결, 추론</small>
         </div>
       </section>
-      <BoardArt />
-      <footer>
-        <span>THE GAME OF TWELVE</span>
-        <span>ALGORITHM × STRATEGY × CLASSROOM</span>
-      </footer>
+      <SoundControl />
     </main>
   );
 }
-function Logo() {
+function Logo({ home = false }: { home?: boolean }) {
   return (
     <div className="brand">
       <span className="brand-mark"><img src="/images/branding/emblem_twelve.png" alt="" /></span>
       <span>
-        TWELVE
-        <br />
-        <small>ALGORITHM BOARD GAME</small>
+        {home ? "더 지니어스 한 학급 놀이" : "TWELVE"}
+        {!home && <><br /><small>ALGORITHM BOARD GAME</small></>}
       </span>
     </div>
   );
+}
+function Practice({ back }: { back: () => void }) {
+  const [game, setGame] = useState<GameState | null>(null);
+  const [names, setNames] = useState<[string, string]>(["플레이어 1", "플레이어 2"]);
+  if (game) return <GameBoard game={game} setGame={setGame} names={names} net="practice" finish={() => setGame(null)} />;
+  return <main className="join-screen practice-screen"><button className="corner-back" onClick={back}>← 메인 화면</button><section className="join-card-large practice-card"><Logo /><small>PRACTICE MATCH</small><h1>둘이서 십이장기를<br />연습해 보세요.</h1><div className="practice-names"><input value={names[0]} onChange={(e) => setNames([e.target.value, names[1]])} aria-label="첫 번째 플레이어 이름"/><b>VS</b><input value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} aria-label="두 번째 플레이어 이름"/></div><button className="primary connect-button" onClick={() => { audio.cue("start"); setGame(newGame(`practice-${Date.now()}`)); }}>연습경기 시작</button></section></main>;
 }
 function Teacher({ back }: { back: () => void }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -216,6 +207,7 @@ function Teacher({ back }: { back: () => void }) {
   const [remaining, setRemaining] = useState(0);
   const [qr, setQr] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
   const peer = useRef<Peer | null>(null),
     conns = useRef(new Map<string, DataConnection>()),
     sessionRef = useRef<Session | null>(null);
@@ -418,6 +410,7 @@ function Teacher({ back }: { back: () => void }) {
                 수업 복구
               </button>
             </div>
+            <p className="restore-help">페이지가 불안정하게 종료되었을 경우 기존 학급 코드를 입력하고 게임을 이어서 진행하세요.</p>
           </div>
           <button className="text-back" onClick={back}>
             ← 메인으로
@@ -436,8 +429,8 @@ function Teacher({ back }: { back: () => void }) {
           <span className={`online ${net}`}>
             ● {net === "online" ? "경기장 접속 가능" : "연결 준비 중"}
           </span>
-          <button className="ghost" onClick={back}>
-            메인
+          <button className="ghost" onClick={() => { if (confirm("클릭 시 게임이 초기화됩니다. 정말 종료하시겠습니까?")) { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); } }}>
+            메인 화면(게임 초기화)
           </button>
         </div>
       </header>
@@ -555,7 +548,7 @@ function Teacher({ back }: { back: () => void }) {
         <article className="panel qr-panel">
           <small>02 · STUDENT ACCESS</small>
           <h2>경기장 접속</h2>
-          {qr && <img src={qr} alt={`수업 코드 ${session.code} QR 코드`} />}
+          {qr && <button className="qr-zoom-button" onClick={() => setQrExpanded(true)} aria-label="QR 코드 크게 보기"><img src={qr} alt={`수업 코드 ${session.code} QR 코드`} /></button>}
           <b>{session.code}</b>
           <button
             onClick={() =>
@@ -640,6 +633,7 @@ function Teacher({ back }: { back: () => void }) {
       {showResults && (
         <ResultsOverlay players={session.players} close={() => setShowResults(false)} />
       )}
+      {qrExpanded && <div className="qr-lightbox" onClick={() => setQrExpanded(false)}><button aria-label="확대 QR 코드 닫기">×</button><img src={qr} alt={`확대된 수업 코드 ${session.code} QR 코드`} /><b>{session.code}</b></div>}
     </main>
   );
 }
@@ -818,31 +812,34 @@ function ArenaClient({ back }: { back: () => void }) {
             }
             placeholder="4자리 수업 코드"
           />
-          <div className="arena-numbers">
-            {Array.from({ length: 12 }, (_, i) => (
-              <button
-                className={number === i + 1 ? "on" : ""}
-                key={i}
-                onClick={() => setNumber(i + 1)}
-              >
-                {String(i + 1).padStart(2, "0")}
-              </button>
-            ))}
+          <div className="arena-number-row">
+            <div className="arena-numbers">
+              {Array.from({ length: 16 }, (_, i) => (
+                <button
+                  className={number === i + 1 ? "on" : ""}
+                  key={i}
+                  onClick={() => setNumber(i + 1)}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </button>
+              ))}
+            </div>
+            <p className="arena-number-help">선생님께서 태블릿 번호를 지정해 주세요.<br />학생들이 임의로 지정할 경우 태블릿 번호가 중복될 수 있습니다.</p>
           </div>
           <button
-            className="primary"
+            className="primary connect-button"
             disabled={code.length !== 4 || !number}
             onClick={connect}
           >
             경기장 연결
           </button>
-          <button className="text-back" onClick={back}>
-            ← 메인으로
+          <button className="text-back corner-back" onClick={back}>
+            ← 메인 화면
           </button>
           <p>
             {net === "reconnecting"
               ? "교사 화면을 찾는 중입니다…"
-              : "수업 코드와 이 태블릿의 경기장 번호를 선택하세요."}
+              : "수업 코드를 입력한 후 이 태블릿의 경기장 번호를 선택하세요."}
           </p>
         </section>
       </main>
@@ -1224,32 +1221,6 @@ function Manual({ close }: { close: () => void }) {
             다음 →
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-function BoardArt() {
-  return (
-    <div className="board-art" aria-hidden>
-      <div className="halo" />
-      <div className="mini-board">
-        {["相", "王", "將", "", "子", "", "", "子", "", "將", "王", "相"].map(
-          (p, i) => (
-            <div key={i}>
-              {p && <span className={i < 6 ? "amber" : "blue"}>{p}</span>}
-            </div>
-          ),
-        )}
-      </div>
-      <div className="flow-chip chip-one">
-        <small>STEP 03</small>
-        <b>말 선택</b>
-        <span>將</span>
-      </div>
-      <div className="flow-chip chip-two">
-        <small>CONDITION</small>
-        <b>상대 말이 있는가?</b>
-        <span>YES</span>
       </div>
     </div>
   );
