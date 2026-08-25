@@ -89,7 +89,8 @@ const arenaKey = (c: string) => `twelve-arena-${c}`;
 export default function App() {
   useEffect(() => {
     const click = (event: MouseEvent) => {
-      if ((event.target as HTMLElement).closest("button")) audio.tone("click");
+      const button = (event.target as HTMLElement).closest("button");
+      if (button) audio.tone(button.closest(".concept-cards") ? "card" : "click");
     };
     document.addEventListener("click", click);
     return () => document.removeEventListener("click", click);
@@ -205,11 +206,12 @@ function Practice({ back }: { back: () => void }) {
   const [game, setGame] = useState<GameState | null>(null);
   const [names, setNames] = useState<[string, string]>(["플레이어 1", "플레이어 2"]);
   if (game) return <GameBoard game={game} setGame={setGame} names={names} net="practice" finish={() => setGame(null)} exit={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) back(); }} />;
-  return <main className="join-screen practice-screen"><button className="corner-back corner-right" onClick={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) back(); }}>메인 화면</button><section className="join-card-large practice-card"><Logo /><small>PRACTICE MATCH</small><h1>둘이서 십이장기를<br />연습해 보세요.</h1><div className="practice-names"><input value={names[0]} onChange={(e) => setNames([e.target.value, names[1]])} aria-label="첫 번째 플레이어 이름"/><b>VS</b><input value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} aria-label="두 번째 플레이어 이름"/></div><button className="primary connect-button" onClick={() => { audio.cue("start"); setGame(newGame(`practice-${Date.now()}`)); }}>연습경기 시작</button></section></main>;
+  return <main className="join-screen practice-screen"><button className="corner-back corner-right" onClick={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) back(); }}>메인 화면</button><section className="join-card-large practice-card"><Logo /><small>PRACTICE MATCH</small><h1>둘이서 십이장기를<br />연습해 보세요.</h1><div className="practice-names"><input value={names[0]} onChange={(e) => setNames([e.target.value, names[1]])} aria-label="첫 번째 플레이어 이름"/><b>VS</b><input value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} aria-label="두 번째 플레이어 이름"/></div><button className="primary connect-button" onClick={() => { void audio.setEnabled(true); audio.cue("start"); setGame(newGame(`practice-${Date.now()}`)); }}>연습경기 시작</button></section></main>;
 }
 function TeacherIntro({ complete, back }: { complete: () => void; back: () => void }) {
   const [slide, setSlide] = useState(0);
   const [flipped, setFlipped] = useState<number[]>([]);
+  const [exitConfirm, setExitConfirm] = useState(false);
   const cards = slide === 0 ? [
     ["문제 해결 절차", "문제란 해결할 일이나 상황을 말하고, 문제를 효율적으로 해결하기 위해 순서에 맞게 차례대로 처리하는 것을 문제 해결 절차라고 합니다."],
     ["알고리즘", "컴퓨터 용어로 사용되며, 컴퓨터가 어떤 일을 수행하기 위한 단계적 방법입니다."],
@@ -219,15 +221,19 @@ function TeacherIntro({ complete, back }: { complete: () => void; back: () => vo
     ["순서도", "미리 약속된 기호와 화살표를 사용하여 알고리즘의 흐름과 순서를 그림으로 표현하는 방법입니다."],
   ];
   return <main className="teacher-intro">
-    <button className="intro-back" onClick={back}>← 메인 화면</button>
+    <button className="intro-back" onClick={() => setExitConfirm(true)}>← 메인 화면</button>
     <section className="intro-stage">
       <small>CLASS INTRO · 0{slide + 1}/04</small>
-      {slide < 2 && <><h1>{slide === 0 ? "문제 해결 절차와 알고리즘" : "알고리즘을 표현하는 방법"}</h1><p>카드를 눌러 개념을 확인해 보세요.</p><div className={`concept-cards count-${cards.length}`}>{cards.map((card, i) => <button key={card[0]} className={flipped.includes(i) ? "flipped" : ""} onClick={() => setFlipped((x) => x.includes(i) ? x.filter((n) => n !== i) : [...x, i])}><span className="concept-front"><b>{card[0]}</b><small>TOUCH TO LEARN</small></span><span className="concept-back"><b>{card[0]}</b><p>{card[1]}</p></span></button>)}</div></>}
+      {slide < 2 && <><h1>{slide === 0 ? "문제 해결 절차와 알고리즘" : "알고리즘을 표현하는 방법"}</h1><p>카드를 눌러 개념을 확인해 보세요.</p><div className={`concept-cards count-${cards.length}`}>{cards.map((card, i) => <button key={card[0]} className={flipped.includes(i) ? "flipped" : ""} onClick={() => setFlipped((x) => x.includes(i) ? x.filter((n) => n !== i) : [...x, i])}><span className="concept-front"><b>{card[0]}</b><small>TOUCH TO LEARN</small><i className="click-cue">☝</i></span><span className="concept-back"><b>{card[0]}</b><p>{card[1]}</p><i className="click-cue">↶</i></span></button>)}</div></>}
       {slide === 2 && <><h1>순서도 예시</h1><p>순서도는 시작과 끝, 처리, 판단을 약속된 도형과 화살표로 연결해 문제 해결의 순서를 한눈에 보여 줍니다.</p><div className="intro-flow"><span>시작</span><i>↓</i><b>게임 상황 확인</b><i>↓</i><em>이동할 수 있는가?</em><i>↓ YES</i><b>말 이동</b><i>↓</i><span>끝</span></div></>}
       {slide === 3 && <div className="intro-finale"><p>십이장기 게임을 통해</p><p>전략과 알고리즘을 알아가고</p><strong>마지막 최후의 승자가 돼라.</strong></div>}
       <div className="intro-nav"><button disabled={!slide} onClick={() => { setSlide(slide - 1); setFlipped([]); }}>← 이전</button><div>{[0,1,2,3].map(i => <i className={i === slide ? "on" : ""} key={i} />)}</div><button onClick={() => { if (slide === 3) complete(); else { setSlide(slide + 1); setFlipped([]); } }}>{slide === 3 ? "새 수업 만들기 →" : "다음 →"}</button></div>
     </section>
+    {exitConfirm && <ConfirmDialog title="인트로를 종료할까요?" message="인트로를 종료하고 메인화면으로 나가시겠습니까?" confirm="메인 화면으로" onConfirm={back} onCancel={() => setExitConfirm(false)} />}
   </main>;
+}
+function ConfirmDialog({ title, message, confirm, onConfirm, onCancel }: { title: string; message: string; confirm: string; onConfirm: () => void; onCancel: () => void }) {
+  return <div className="service-confirm" role="dialog" aria-modal="true"><div><small>PLEASE CONFIRM</small><h3>{title}</h3><p>{message}</p><span><button onClick={onCancel}>취소</button><button className="danger-confirm" onClick={onConfirm}>{confirm}</button></span></div></div>;
 }
 function Teacher({ back }: { back: () => void }) {
   const [intro, setIntro] = useState(true);
@@ -240,6 +246,7 @@ function Teacher({ back }: { back: () => void }) {
   const [qr, setQr] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(false);
   const peer = useRef<Peer | null>(null),
     conns = useRef(new Map<string, DataConnection>()),
     sessionRef = useRef<Session | null>(null);
@@ -465,7 +472,7 @@ function Teacher({ back }: { back: () => void }) {
           <span className={`online ${net}`}>
             ● {net === "online" ? "경기장 접속 가능" : "연결 준비 중"}
           </span>
-          <button className="ghost" onClick={() => { if (confirm("클릭 시 게임이 초기화됩니다. 정말 종료하시겠습니까?")) { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); } }}>
+          <button className="ghost" onClick={() => setResetConfirm(true)}>
             메인 화면(게임 초기화)
           </button>
         </div>
@@ -588,6 +595,7 @@ function Teacher({ back }: { back: () => void }) {
           <small>02 · STUDENT ACCESS</small>
           <h2>경기장 접속</h2>
           {qr && <button className="qr-zoom-button" onClick={() => setQrExpanded(true)} aria-label="QR 코드 크게 보기"><img src={qr} alt={`수업 코드 ${session.code} QR 코드`} /></button>}
+          <small className="qr-click-hint">QR코드를 클릭하면 확대됩니다.</small>
           <b>{session.code}</b>
           <button
             onClick={() =>
@@ -607,27 +615,31 @@ function Teacher({ back }: { back: () => void }) {
               <h2>{session.matches.length}경기 완료</h2>
             </div>
           </div>
-          <div className="match-dashboard-grid"><div className="mini-ranking"><b>플레이어 순위</b>{[...session.players].sort((a,b)=>b.score-a.score).map((p,i)=><div key={p.id}><strong>{i+1}</strong><span>{p.name}</span><small>{p.games}경기</small><em>{p.win}승 {p.loss}패</em></div>)}</div><div className="result-log"><b>게임 결과 로그</b>{session.matches.slice().reverse().map((m)=><div key={m.matchId}><span>{session.players.find(p=>p.id===m.playerIds[m.winner])?.name} 승리</span><small>TURN {m.turns} · {m.counted ? "반영" : "미반영"}</small></div>)}</div></div>
+          <div className="match-dashboard-grid"><div className="mini-ranking"><b>플레이어 순위</b>{[...session.players].sort((a,b)=>b.score-a.score).map((p,i)=><div key={p.id}><strong>{i+1}</strong><span>{p.name}</span><small>{p.games}경기</small><em>{p.win}승 {p.loss}패</em></div>)}</div><div className="result-log"><b>게임 결과 로그</b>{session.matches.slice().reverse().map((m)=>{ const winner=session.players.find(p=>p.id===m.playerIds[m.winner]); const loser=session.players.find(p=>p.id===m.playerIds[m.winner===0?1:0]); return <div key={m.matchId}><span><b>{winner?.name}</b> 승리</span><em>VS {loser?.name}</em><small>{m.turns}턴 · {m.counted ? "반영" : "미반영"}</small></div>})}</div></div>
         </article>
       </section>
       <section className="live-arena-strip"><div className="strip-title"><small>LIVE ARENAS</small><h2>{arenas.length}대 연결</h2></div><div className="arena-card-grid">{arenas.length ? arenas.sort((a,b)=>a.number-b.number).map((a)=><article key={a.id} className={Date.now()-a.lastSeen<25000 ? "connected" : "disconnected"}><strong>{String(a.number).padStart(2,"0")}</strong><b>{a.status === "playing" ? "진행 중" : "대기"}</b><small>{a.players?.map(id=>session.players.find(p=>p.id===id)?.name).join(" VS ") || "플레이어 대기"}</small></article>) : <div className="empty">아직 연결된 경기장이 없습니다.</div>}</div>
       </section>
       {showResults && (
-        <ResultsOverlay session={session} reset={() => { if (confirm("게임 결과와 학급 정보가 초기화됩니다. 메인 화면으로 이동하시겠습니까?")) { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); } }} />
+        <ResultsOverlay session={session} reset={() => { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); }} />
       )}
       {qrExpanded && <div className="qr-lightbox" onClick={() => setQrExpanded(false)}><button aria-label="확대 QR 코드 닫기">×</button><img src={qr} alt={`확대된 수업 코드 ${session.code} QR 코드`} /><b>{session.code}</b></div>}
+      {resetConfirm && <ConfirmDialog title="게임을 초기화할까요?" message="현재 수업과 경기 정보를 초기화하고 메인 화면으로 이동합니다." confirm="초기화하고 이동" onCancel={() => setResetConfirm(false)} onConfirm={() => { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); }} />}
     </main>
   );
 }
 function ResultsOverlay({ session, reset }: { session: Session; reset: () => void }) {
   const [detail, setDetail] = useState<Player | null>(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
+  useEffect(() => { void audio.playResultBgm(); return () => audio.stopResultBgm(); }, []);
   const players = session.players;
   const ranked = [...players].sort((a, b) => b.score - a.score || b.win - a.win || a.name.localeCompare(b.name));
   const podium = [ranked[1], ranked[0], ranked[2]];
   const copyResults = () => { const rows = [["순위","이름","경기","승","패","승점"], ...ranked.map((p,i)=>[i+1,p.name,p.games,p.win,p.loss,p.score])]; navigator.clipboard.writeText(rows.map(r=>r.join("\t")).join("\n")); };
   return (
     <div className="results-screen">
-      <button className="results-reset" onClick={reset}>메인 화면(게임 초기화)</button>
+      <div className="celebration" aria-hidden>{Array.from({length:28},(_,i)=><i key={i} style={{left:`${(i*37)%100}%`,animationDelay:`${(i%9)*-.23}s`,animationDuration:`${2.4+(i%5)*.3}s`}} />)}</div>
+      <button className="results-reset" onClick={() => setResetConfirm(true)}>메인 화면(게임 초기화)</button>
       <div className="result-copy-box"><button onClick={copyResults}>게임 결과 복사하기</button><small>이 버튼을 클릭한 후 한셀/엑셀에 가서 붙여넣기 하세요. 게임 결과를 저장할 수 있습니다.</small></div>
       <div className="results-title"><small>CLASSROOM FINAL RANKING</small><h2>오늘의 십이장기 타이틀</h2></div>
       <div className="podium">
@@ -643,6 +655,7 @@ function ResultsOverlay({ session, reset }: { session: Session; reset: () => voi
       </div>
       <p className="best-move-message">내가 했던 최고의 한 수(알고리즘)를 찾아보세요.</p>
       {detail && <div className="record-detail"><button onClick={() => setDetail(null)}>×</button><h3>{detail.name}의 경기 전적</h3>{session.matches.filter(m=>m.playerIds.includes(detail.id)).map(m=>{ const other=m.playerIds.find(id=>id!==detail.id); const won=m.playerIds[m.winner]===detail.id; return <div key={m.matchId}><b>{won ? "승리" : "패배"}</b><span>VS {players.find(p=>p.id===other)?.name}</span><small>TURN {m.turns} · {m.counted ? "승점 반영" : "미반영"}</small></div>})}</div>}
+      {resetConfirm && <ConfirmDialog title="게임 결과를 초기화할까요?" message="게임 결과와 학급 정보가 모두 초기화되고 메인 화면으로 이동합니다." confirm="초기화하고 이동" onCancel={() => setResetConfirm(false)} onConfirm={reset} />}
     </div>
   );
 }
@@ -713,6 +726,7 @@ function ArenaClient({ back }: { back: () => void }) {
         }
         if (d.type === "MATCH_REJECTED") setNotice(String(d.reason));
         if (d.type === "MATCH_APPROVED") {
+          void audio.setEnabled(true);
           const m = d.match as { matchId: string };
           const g = newGame(m.matchId);
           audio.cue("start");
@@ -740,6 +754,7 @@ function ArenaClient({ back }: { back: () => void }) {
     });
   }
   function request() {
+    void audio.setEnabled(true);
     client.current?.send({
       type: "MATCH_START_REQUEST",
       arenaId,
@@ -897,6 +912,7 @@ function ArenaClient({ back }: { back: () => void }) {
           >
             두 선수 확인 · 경기 시작
           </button>
+          {session.status === "setup" && <p className="teacher-start-hint">선생님이 게임 시작을 하면 활성화됩니다.</p>}
           {stored && (
             <button
               className="resume"
@@ -1039,7 +1055,7 @@ function GameBoard({
             {game.board.map((p, i) => (
               <button
                 key={i}
-                className={`${selected === i ? "selected" : ""} ${legal.includes(i) ? "legal" : ""}`}
+                className={`${selected === i ? "selected" : ""} ${legal.includes(i) ? "legal" : ""} ${i < 3 ? "end-zone zone-top" : i > 8 ? "end-zone zone-bottom" : ""}`}
                 onClick={() => tap(i)}
               >
                 {p && (
@@ -1081,8 +1097,7 @@ function GameBoard({
       {game.winner !== null && (
         <div className="modal match-finish-modal">
           <div className="dialog win finish-summary">
-            <small>MATCH COMPLETE · AUTO SENT</small>
-            <h2>{names[game.winner]} 승리!</h2>
+            <h2 className="winner-message">{names[game.winner]} 승리!</h2>
             <p>
               {game.reason === "KING_SURVIVED"
                 ? "王이 상대 진영에서 한 턴 생존했습니다."
@@ -1090,12 +1105,10 @@ function GameBoard({
             </p>
             <div className="result-stats">
               <span>{game.turnNumber}턴</span>
-              <span>{names[0]} {records?.[0]?.win ?? 0}승 {records?.[0]?.loss ?? 0}패</span>
-              <span>{names[1]} {records?.[1]?.win ?? 0}승 {records?.[1]?.loss ?? 0}패</span>
             </div>
           </div>
-          {gallerySide !== null && <AlgorithmGallery side={gallerySide} name={names[gallerySide]} flows={game.saved.filter((x) => x.playerId === String(gallerySide))} open={setOpenFlow} next={() => { const other: Side = gallerySide === 0 ? 1 : 0; if (gallerySide === game.winner) setGallerySide(other); else finish(); }} final={gallerySide !== game.winner} />}
-          {openFlow && <div className="flow-lightbox"><button onClick={() => setOpenFlow(null)}>×</button><FlowPreview flow={openFlow} /><button onClick={() => downloadFlow(openFlow, names[Number(openFlow.playerId) as Side])}>이미지 저장</button></div>}
+          {gallerySide !== null && <AlgorithmGallery side={gallerySide} name={names[gallerySide]} opponent={names[gallerySide === 0 ? 1 : 0]} outcome={gallerySide === game.winner ? "승리" : "패배"} flows={game.saved.filter((x) => x.playerId === String(gallerySide))} open={setOpenFlow} next={() => { const other: Side = gallerySide === 0 ? 1 : 0; if (gallerySide === game.winner) setGallerySide(other); else finish(); }} final={gallerySide !== game.winner} />}
+          {openFlow && <div className="flow-lightbox"><button onClick={() => setOpenFlow(null)}>×</button><FlowPreview flow={openFlow} /><button onClick={() => { const side = Number(openFlow.playerId) as Side; downloadFlow(openFlow, names[side], names[side === 0 ? 1 : 0], side === game.winner ? "승리" : "패배"); }}>이미지 저장</button></div>}
         </div>
       )}
     </main>
@@ -1104,17 +1117,19 @@ function GameBoard({
 function FlowPreview({ flow }: { flow: SavedFlow }) {
   return <div className="flow-preview"><small>TURN {flow.turn}</small>{flowNodes(flow.events).map((node, i) => <div key={i}><span className={node.shape}>{node.label}</span>{node.answer && <b>{node.answer}</b>}{i < flow.events.length - 1 && <i>↓</i>}</div>)}</div>;
 }
-function AlgorithmGallery({ side, name, flows, open, next, final }: { side: Side; name: string; flows: SavedFlow[]; open: (flow: SavedFlow) => void; next: () => void; final: boolean }) {
-  return <aside className={`algorithm-gallery gallery-side-${side}`}><small>{side === 0 ? "TOP PLAYER" : "BOTTOM PLAYER"}</small><h3>{name}의 저장한 알고리즘</h3><p>한 태블릿에서 안전하게 저장할 수 있도록 두 선수의 목록을 순서대로 보여 줍니다.</p><div>{flows.length ? flows.map((flow, i) => <button key={flow.timestamp} onClick={() => open(flow)}><strong>TURN {flow.turn}</strong><span>{flow.events.slice(0,4).map(e => e.label).join(" → ")}</span><small>크게 보기</small></button>) : <div className="no-flows">저장한 알고리즘이 없습니다.</div>}</div><button className="gallery-next" onClick={next}>{final ? "확인 완료 · 다음 경기 준비" : "저장 완료 또는 건너뛰기 →"}</button></aside>;
+function AlgorithmGallery({ side, name, opponent, outcome, flows, open, next, final }: { side: Side; name: string; opponent: string; outcome: string; flows: SavedFlow[]; open: (flow: SavedFlow) => void; next: () => void; final: boolean }) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const complete = () => { flows.filter(f => selected.includes(f.timestamp)).forEach(f => downloadFlow(f, name, opponent, outcome)); next(); };
+  return <aside className={`algorithm-gallery gallery-side-${side}`}><small>{side === 0 ? "TOP PLAYER" : "BOTTOM PLAYER"}</small><h3>{name}의 저장한 알고리즘</h3><p>썸네일을 누르면 확대됩니다. 저장할 항목의 원형 체크 버튼을 선택해 주세요.</p><div>{flows.length ? flows.map((flow) => <article className="algorithm-thumb" key={flow.timestamp}><button className="thumb-preview" onClick={() => open(flow)}><strong>TURN {flow.turn}</strong><span>{flowNodes(flow.events).slice(0,5).map((node,i)=><i className={node.shape} key={i}>{node.label}</i>)}</span><small>눌러서 크게 보기</small></button><button className={`flow-check ${selected.includes(flow.timestamp) ? "checked" : ""}`} onClick={() => setSelected(x => x.includes(flow.timestamp) ? x.filter(n=>n!==flow.timestamp) : [...x,flow.timestamp])} aria-label={`턴 ${flow.turn} 저장 선택`}>{selected.includes(flow.timestamp) ? "✓" : ""}</button></article>) : <div className="no-flows">저장한 알고리즘이 없습니다.</div>}</div><button className="gallery-next" onClick={complete}>{selected.length ? `선택한 ${selected.length}개 저장 완료` : final ? "건너뛰고 다음 경기 준비" : "건너뛰기 →"}</button></aside>;
 }
-function downloadFlow(flow: SavedFlow, name: string) {
+function downloadFlow(flow: SavedFlow, name: string, opponent: string, outcome: string) {
   const nodes = flowNodes(flow.events), canvas = document.createElement("canvas");
   canvas.width = 900; canvas.height = Math.max(700, nodes.length * 105 + 170);
   const ctx = canvas.getContext("2d"); if (!ctx) return;
   ctx.fillStyle = "#07131d"; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.textAlign = "center"; ctx.fillStyle = "#ffbf4c"; ctx.font = "700 26px sans-serif"; ctx.fillText(`${name} · TURN ${flow.turn} 알고리즘`, 450, 55);
   nodes.forEach((node, i) => { const y = 100 + i * 105; ctx.fillStyle = node.shape === "decision" ? "#3c321f" : "#102d3b"; ctx.strokeStyle = node.shape === "decision" ? "#ffbf4c" : "#00d7ff"; ctx.lineWidth = 3; ctx.fillRect(225,y,450,62); ctx.strokeRect(225,y,450,62); ctx.fillStyle = "white"; ctx.font = "600 20px sans-serif"; ctx.fillText(node.label,450,y+39); if (node.answer) { ctx.fillStyle="#ffbf4c"; ctx.fillText(node.answer,710,y+39); } if (i<nodes.length-1) { ctx.fillStyle="#77a1b0"; ctx.fillText("↓",450,y+91); } });
-  const link = document.createElement("a"); link.download = `${name}-turn-${flow.turn}-algorithm.png`; link.href = canvas.toDataURL("image/png"); link.click();
+  const link = document.createElement("a"); link.download = `${name}(${opponent}, ${flow.turn}턴, ${outcome}).png`; link.href = canvas.toDataURL("image/png"); link.click();
 }
 function Captured({
   side,
@@ -1132,6 +1147,7 @@ function Captured({
       <small>포로</small>
       {game.captured[side].map((p, i) => (
         <button
+          className={`captured-piece p${side}`}
           disabled={p.capturedOnTurn === game.turnNumber}
           onClick={() => pick(i)}
           key={p.id}
@@ -1222,8 +1238,7 @@ function Manual({ close }: { close: () => void }) {
             ← 이전
           </button>
           <div>
-            {data &&
-              [0, 1, 2, 3, 4, 5].map((i) => (
+            {[0, 1, 2, 3, 4, 5].map((i) => (
                 <i key={i} className={i === slide ? "on" : ""} />
               ))}
           </div>

@@ -9,6 +9,7 @@ const files: Record<PremiumCue, string> = {
 class AudioDirector {
   private context: AudioContext | null = null;
   private bgm: HTMLAudioElement | null = null;
+  private resultBgm: HTMLAudioElement | null = null;
   private enabled = false;
   private volume = 0.16;
 
@@ -29,7 +30,16 @@ class AudioDirector {
     this.volume = Math.max(0, Math.min(1, volume));
     localStorage.setItem("twelve-volume", String(this.volume));
     if (this.bgm) this.bgm.volume = this.volume;
+    if (this.resultBgm) this.resultBgm.volume = Math.min(0.32, this.volume + 0.08);
   }
+
+  async playResultBgm() {
+    this.bgm?.pause();
+    this.resultBgm ??= Object.assign(new Audio("/audio/bgm/bgm_results.mp3"), { loop: true, volume: Math.min(0.32, this.volume + 0.08) });
+    try { await this.resultBgm.play(); } catch { /* File may be supplied later or autoplay may be blocked. */ }
+  }
+
+  stopResultBgm() { this.resultBgm?.pause(); }
 
   async setEnabled(enabled: boolean) {
     this.enabled = enabled;
@@ -55,7 +65,7 @@ class AudioDirector {
     void sound.play().catch(() => undefined);
   }
 
-  tone(kind: "click" | "select" | "move" | "capture" | "save" | "error") {
+  tone(kind: "click" | "card" | "select" | "move" | "capture" | "save" | "error") {
     if (typeof AudioContext === "undefined") return;
     this.context ??= new AudioContext();
     const ctx = this.context;
@@ -64,6 +74,7 @@ class AudioDirector {
     const now = ctx.currentTime;
     const settings = {
       click: [420, 540, 0.045],
+      card: [330, 690, 0.11],
       select: [560, 720, 0.07],
       move: [310, 470, 0.1],
       capture: [190, 90, 0.16],
