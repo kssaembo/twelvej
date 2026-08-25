@@ -50,14 +50,13 @@ class AudioDirector {
   }
 
   cue(name: PremiumCue) {
-    if (!this.enabled) return;
     const sound = new Audio(files[name]);
     sound.volume = name === "victory" ? 0.62 : 0.5;
     void sound.play().catch(() => undefined);
   }
 
   tone(kind: "click" | "select" | "move" | "capture" | "save" | "error") {
-    if (!this.enabled || typeof AudioContext === "undefined") return;
+    if (typeof AudioContext === "undefined") return;
     this.context ??= new AudioContext();
     const ctx = this.context;
     const oscillator = ctx.createOscillator();
