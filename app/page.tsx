@@ -95,6 +95,14 @@ export default function App() {
     document.addEventListener("click", click);
     return () => document.removeEventListener("click", click);
   }, []);
+  useEffect(() => {
+    const stop = () => audio.stopAll();
+    const visibility = () => { if (document.visibilityState === "hidden") audio.pauseAll(); else audio.resumeActive(); };
+    window.addEventListener("pagehide", stop);
+    window.addEventListener("beforeunload", stop);
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.removeEventListener("pagehide", stop); window.removeEventListener("beforeunload", stop); document.removeEventListener("visibilitychange", visibility); audio.stopAll(); };
+  }, []);
   const params =
     typeof location !== "undefined"
       ? new URLSearchParams(location.search)
@@ -116,6 +124,7 @@ export default function App() {
   };
   return (
     <>
+      <SoundControl />
       {view === "home" && (
         <Home
           teacher={() => navigate("teacher")}
@@ -134,6 +143,7 @@ export default function App() {
 function SoundControl() {
   const [enabled, setEnabled] = useState(() => audio.isEnabled());
   const [volume, setVolume] = useState(() => audio.getVolume());
+  useEffect(() => { const sync = () => { setEnabled(audio.isEnabled()); setVolume(audio.getVolume()); }; window.addEventListener("twelve-audio-change", sync); return () => window.removeEventListener("twelve-audio-change", sync); }, []);
   return (
     <div className={`sound-control ${enabled ? "on" : ""}`}>
       <button onClick={async () => { const next = !enabled; setEnabled(next); await audio.setEnabled(next); }} aria-label={enabled ? "BGM 일시정지" : "BGM 재생"}>{enabled ? "Ⅱ" : "▶"}</button>
@@ -187,7 +197,6 @@ function Home({
           <small>5,6학년 실과 컴퓨터 단원, 창체 학급 놀이, 문제 해결, 추론</small>
         </div>
       </section>
-      <SoundControl />
     </main>
   );
 }
@@ -205,8 +214,9 @@ function Logo({ home = false }: { home?: boolean }) {
 function Practice({ back }: { back: () => void }) {
   const [game, setGame] = useState<GameState | null>(null);
   const [names, setNames] = useState<[string, string]>(["플레이어 1", "플레이어 2"]);
-  if (game) return <GameBoard game={game} setGame={setGame} names={names} net="practice" finish={() => setGame(null)} exit={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) back(); }} />;
-  return <main className="join-screen practice-screen"><button className="corner-back corner-right" onClick={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) back(); }}>메인 화면</button><section className="join-card-large practice-card"><Logo /><small>PRACTICE MATCH</small><h1>둘이서 십이장기를<br />연습해 보세요.</h1><div className="practice-names"><input value={names[0]} onChange={(e) => setNames([e.target.value, names[1]])} aria-label="첫 번째 플레이어 이름"/><b>VS</b><input value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} aria-label="두 번째 플레이어 이름"/></div><button className="primary connect-button" onClick={() => { void audio.setEnabled(true); audio.cue("start"); setGame(newGame(`practice-${Date.now()}`)); }}>연습경기 시작</button></section></main>;
+  const [exitConfirm, setExitConfirm] = useState(false);
+  if (game) return <GameBoard game={game} setGame={setGame} names={names} net="practice" finish={() => setGame(null)} exit={back} />;
+  return <main className="join-screen practice-screen"><button className="corner-back corner-right" onClick={() => setExitConfirm(true)}>메인 화면</button><section className="join-card-large practice-card"><Logo /><small>PRACTICE MATCH</small><h1>둘이서 십이장기를<br />연습해 보세요.</h1><div className="practice-names"><input value={names[0]} onChange={(e) => setNames([e.target.value, names[1]])} aria-label="첫 번째 플레이어 이름"/><b>VS</b><input value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} aria-label="두 번째 플레이어 이름"/></div><button className="primary connect-button" onClick={() => { void audio.setEnabled(true); audio.cue("start"); setGame(newGame(`practice-${Date.now()}`)); }}>연습경기 시작</button></section>{exitConfirm && <ConfirmDialog title="연습경기를 종료할까요?" message="메인 화면으로 돌아가면 현재 작업과 연습경기가 초기화됩니다." confirm="메인 화면으로" onCancel={() => setExitConfirm(false)} onConfirm={back} />}</main>;
 }
 function TeacherIntro({ complete, back }: { complete: () => void; back: () => void }) {
   const [slide, setSlide] = useState(0);
@@ -247,6 +257,7 @@ function Teacher({ back }: { back: () => void }) {
   const [showResults, setShowResults] = useState(false);
   const [qrExpanded, setQrExpanded] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [endConfirm, setEndConfirm] = useState(false);
   const peer = useRef<Peer | null>(null),
     conns = useRef(new Map<string, DataConnection>()),
     sessionRef = useRef<Session | null>(null);
@@ -512,16 +523,11 @@ function Teacher({ back }: { back: () => void }) {
           </button>
           <button
             className="end-game-button"
-            onClick={() => {
-              if (!confirm("게임을 종료하시겠습니까? 진행 중인 경기는 승점에 반영되지 않습니다.")) return;
-              const s = { ...session, status: "ended" as const };
-              save(s);
-              broadcast({ type: "SESSION_STATE", session: safeSession(s) });
-            }}
+            onClick={() => setEndConfirm(true)}
           >
             게임 종료
           </button>
-          {session.status === "ended" && <button className="timer-result-button" disabled={!session.matches.length} onClick={() => setShowResults(true)}>🏆 결과 공개</button>}
+          {session.status === "ended" && <button className="timer-result-button" disabled={!session.matches.length} onClick={() => { void audio.playResultBgm(); setShowResults(true); }}>🏆 결과 공개</button>}
         </div>
       </div>
       {session.status === "ended" && (
@@ -625,6 +631,7 @@ function Teacher({ back }: { back: () => void }) {
       )}
       {qrExpanded && <div className="qr-lightbox" onClick={() => setQrExpanded(false)}><button aria-label="확대 QR 코드 닫기">×</button><img src={qr} alt={`확대된 수업 코드 ${session.code} QR 코드`} /><b>{session.code}</b></div>}
       {resetConfirm && <ConfirmDialog title="게임을 초기화할까요?" message="현재 수업과 경기 정보를 초기화하고 메인 화면으로 이동합니다." confirm="초기화하고 이동" onCancel={() => setResetConfirm(false)} onConfirm={() => { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); }} />}
+      {endConfirm && <ConfirmDialog title="게임을 종료할까요?" message="게임이 종료되며 현재 진행 중인 경기는 승점에 반영되지 않습니다." confirm="게임 종료" onCancel={() => setEndConfirm(false)} onConfirm={() => { const s = { ...session, status: "ended" as const }; save(s); broadcast({ type: "SESSION_STATE", session: safeSession(s) }); setEndConfirm(false); }} />}
     </main>
   );
 }
@@ -683,6 +690,7 @@ function ArenaClient({ back }: { back: () => void }) {
   const [players, setPlayers] = useState<[string, string]>(["", ""]);
   const [game, setGame] = useState<GameState | null>(null);
   const [notice, setNotice] = useState("");
+  const [exitConfirm, setExitConfirm] = useState(false);
   const client = useRef<Awaited<ReturnType<typeof connectArena>> | null>(null);
   const gameRef = useRef<GameState | null>(null);
   useEffect(() => {
@@ -778,6 +786,7 @@ function ArenaClient({ back }: { back: () => void }) {
     localStorage.setItem(`${arenaKey(code)}-outbox`, JSON.stringify(msg));
     client.current?.send(msg);
   }
+  function leaveArena() { client.current?.destroy(); localStorage.removeItem(`${arenaKey(code)}-${arenaId}`); localStorage.removeItem(`${arenaKey(code)}-outbox`); back(); }
   if (game && session) {
     return (
       <GameBoard
@@ -798,7 +807,7 @@ function ArenaClient({ back }: { back: () => void }) {
           setGame(null);
           setPlayers(["", ""]);
         }}
-        exit={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) { client.current?.destroy(); localStorage.removeItem(`${arenaKey(code)}-${arenaId}`); localStorage.removeItem(`${arenaKey(code)}-outbox`); back(); } }}
+        exit={leaveArena}
       />
     );
   }
@@ -839,7 +848,7 @@ function ArenaClient({ back }: { back: () => void }) {
           >
             경기장 연결
           </button>
-          <button className="text-back corner-back corner-right" onClick={() => { if (confirm("메인 화면으로 돌아가면 현재까지 하던 작업과 게임이 모두 초기화됩니다. 이동하시겠습니까?")) { client.current?.destroy(); localStorage.removeItem(`${arenaKey(code)}-${arenaId}`); localStorage.removeItem(`${arenaKey(code)}-outbox`); back(); } }}>
+          <button className="text-back corner-back corner-right" onClick={() => setExitConfirm(true)}>
             메인 화면
           </button>
           <p>
@@ -848,6 +857,7 @@ function ArenaClient({ back }: { back: () => void }) {
               : "수업 코드를 입력한 후 이 태블릿의 경기장 번호를 선택하세요."}
           </p>
         </section>
+        {exitConfirm && <ConfirmDialog title="경기장 접속을 종료할까요?" message="메인 화면으로 돌아가면 입력한 코드와 경기장 작업이 초기화됩니다." confirm="메인 화면으로" onCancel={() => setExitConfirm(false)} onConfirm={leaveArena} />}
       </main>
     );
   const stored = localStorage.getItem(`${arenaKey(code)}-${arenaId}`);
@@ -955,6 +965,7 @@ function GameBoard({
   const [liveEvents, setLiveEvents] = useState<[Event[], Event[]]>([[...baseFlow], [...baseFlow]]);
   const [gallerySide, setGallerySide] = useState<Side | null>(null);
   const [openFlow, setOpenFlow] = useState<SavedFlow | null>(null);
+  const [exitConfirm, setExitConfirm] = useState(false);
   useEffect(() => {
     setLiveEvents((current) => { const next: [Event[], Event[]] = [[...current[0]], [...current[1]]]; next[game.turn] = [...baseFlow]; return next; });
     setSelected(null); setPrisoner(null);
@@ -1028,7 +1039,7 @@ function GameBoard({
           <small>ARENA</small>
           <b>TURN {String(game.turnNumber).padStart(2, "0")}</b>
         </div>
-        {exit ? <button className="game-main-button" onClick={exit}>메인 화면</button> : <span>완료 턴 자동 저장</span>}
+        {exit ? <button className="game-main-button" onClick={() => setExitConfirm(true)}>메인 화면</button> : <span>완료 턴 자동 저장</span>}
       </header>
       <div className="game-layout">
         <Flow
@@ -1111,6 +1122,7 @@ function GameBoard({
           {openFlow && <div className="flow-lightbox"><button onClick={() => setOpenFlow(null)}>×</button><FlowPreview flow={openFlow} /><button onClick={() => { const side = Number(openFlow.playerId) as Side; downloadFlow(openFlow, names[side], names[side === 0 ? 1 : 0], side === game.winner ? "승리" : "패배"); }}>이미지 저장</button></div>}
         </div>
       )}
+      {exitConfirm && exit && <ConfirmDialog title="게임을 종료할까요?" message="메인 화면으로 돌아가면 현재까지 진행한 작업과 게임이 모두 초기화됩니다." confirm="초기화하고 이동" onCancel={() => setExitConfirm(false)} onConfirm={exit} />}
     </main>
   );
 }

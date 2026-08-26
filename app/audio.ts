@@ -12,6 +12,9 @@ class AudioDirector {
   private resultBgm: HTMLAudioElement | null = null;
   private enabled = false;
   private volume = 0.16;
+  private mode: "main" | "result" = "main";
+
+  private notify() { if (typeof window !== "undefined") window.dispatchEvent(new Event("twelve-audio-change")); }
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -25,29 +28,53 @@ class AudioDirector {
   }
 
   getVolume() { return this.volume; }
+  getMode() { return this.mode; }
 
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume));
     localStorage.setItem("twelve-volume", String(this.volume));
     if (this.bgm) this.bgm.volume = this.volume;
     if (this.resultBgm) this.resultBgm.volume = Math.min(0.32, this.volume + 0.08);
+    this.notify();
   }
 
   async playResultBgm() {
+    this.mode = "result";
+    this.enabled = true;
+    localStorage.setItem("twelve-sound", "on");
     this.bgm?.pause();
     this.resultBgm ??= Object.assign(new Audio("/audio/bgm/bgm_results.mp3"), { loop: true, volume: Math.min(0.32, this.volume + 0.08) });
-    try { await this.resultBgm.play(); } catch { /* File may be supplied later or autoplay may be blocked. */ }
+    this.resultBgm.currentTime = 0;
+    try { await this.resultBgm.play(); } catch { /* Autoplay may wait for a direct click. */ }
+    this.notify();
   }
 
-  stopResultBgm() { this.resultBgm?.pause(); }
+  stopResultBgm() { if (this.resultBgm) { this.resultBgm.pause(); this.resultBgm.currentTime = 0; } this.mode = "main"; this.notify(); }
+
+  stopAll() {
+    [this.bgm, this.resultBgm].forEach((track) => { if (track) { track.pause(); track.currentTime = 0; } });
+    this.context?.suspend().catch(() => undefined);
+  }
+
+  pauseAll() { this.bgm?.pause(); this.resultBgm?.pause(); }
+  resumeActive() { if (this.enabled) void this.setEnabled(true); }
 
   async setEnabled(enabled: boolean) {
     this.enabled = enabled;
     localStorage.setItem("twelve-sound", enabled ? "on" : "off");
     if (!enabled) {
       this.bgm?.pause();
+      this.resultBgm?.pause();
+      this.notify();
       return;
     }
+    if (this.mode === "result") {
+      this.resultBgm ??= Object.assign(new Audio("/audio/bgm/bgm_results.mp3"), { loop: true, volume: Math.min(0.32, this.volume + 0.08) });
+      try { await this.resultBgm.play(); } catch { /* user gesture may be required */ }
+      this.notify();
+      return;
+    }
+    this.resultBgm?.pause();
     this.bgm ??= Object.assign(new Audio("/audio/bgm/bgm_class_arena.mp3"), {
       loop: true,
       volume: this.volume,
@@ -57,6 +84,7 @@ class AudioDirector {
     } catch {
       // Mobile browsers may wait for the next direct user gesture.
     }
+    this.notify();
   }
 
   cue(name: PremiumCue) {
@@ -69,6 +97,7 @@ class AudioDirector {
     if (typeof AudioContext === "undefined") return;
     this.context ??= new AudioContext();
     const ctx = this.context;
+    if (ctx.state === "suspended") void ctx.resume();
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     const now = ctx.currentTime;
