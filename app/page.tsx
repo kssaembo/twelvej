@@ -31,6 +31,7 @@ type Arena = {
   number: number;
   status: string;
   lastSeen: number;
+  peerId?: string;
   players?: string[];
   matchId?: string;
 };
@@ -232,6 +233,7 @@ function TeacherIntro({ complete, back }: { complete: () => void; back: () => vo
   ];
   return <main className="teacher-intro">
     <button className="intro-back" onClick={() => setExitConfirm(true)}>← 메인 화면</button>
+    <button className="intro-skip" onClick={complete}>건너뛰기 →</button>
     <section className="intro-stage">
       <small>CLASS INTRO · 0{slide + 1}/04</small>
       {slide < 2 && <><h1>{slide === 0 ? "문제 해결 절차와 알고리즘" : "알고리즘을 표현하는 방법"}</h1><p>카드를 눌러 개념을 확인해 보세요.</p><div className={`concept-cards count-${cards.length}`}>{cards.map((card, i) => <button key={card[0]} className={flipped.includes(i) ? "flipped" : ""} onClick={() => setFlipped((x) => x.includes(i) ? x.filter((n) => n !== i) : [...x, i])}><span className="concept-front"><b>{card[0]}</b><small>TOUCH TO LEARN</small><i className="click-cue">☝</i></span><span className="concept-back"><b>{card[0]}</b><p>{card[1]}</p><i className="click-cue">↶</i></span></button>)}</div></>}
@@ -262,7 +264,7 @@ function Teacher({ back }: { back: () => void }) {
     conns = useRef(new Map<string, DataConnection>()),
     sessionRef = useRef<Session | null>(null);
   const save = (s: Session) => {
-    const normalized = { ...s, players: s.players.map((p) => ({ ...p, score: p.win * 2 + p.loss })) };
+    const normalized = { ...s, players: s.players.map((p) => ({ ...p, score: p.win * 3 + p.loss })) };
     sessionRef.current = normalized;
     setSession(normalized);
     localStorage.setItem(sessionKey(normalized.code), JSON.stringify(normalized));
@@ -290,7 +292,17 @@ function Teacher({ back }: { back: () => void }) {
           });
         });
         c.on("data", (d) => handle(c, d as NetMessage));
-        c.on("close", () => conns.current.delete(c.peer));
+        c.on("close", () => {
+          conns.current.delete(c.peer);
+          const latest = sessionRef.current;
+          if (!latest) return;
+          const arena = Object.values(latest.arenas).find((a) => a.peerId === c.peer);
+          if (arena) {
+            const next = structuredClone(latest);
+            delete next.arenas[arena.id];
+            save(next);
+          }
+        });
       },
       setNet,
     ).then((p) => {
@@ -322,8 +334,33 @@ function Teacher({ back }: { back: () => void }) {
     }, 500);
     return () => clearInterval(t);
   }, [session]);
+  useEffect(() => {
+    if (!session?.code) return;
+    const staleTimer = window.setInterval(() => {
+      const latest = sessionRef.current;
+      if (!latest) return;
+      const staleIds = Object.values(latest.arenas)
+        .filter((arena) => Date.now() - arena.lastSeen > 30000)
+        .map((arena) => arena.id);
+      if (!staleIds.length) return;
+      const next = structuredClone(latest);
+      staleIds.forEach((id) => delete next.arenas[id]);
+      save(next);
+    }, 5000);
+    return () => window.clearInterval(staleTimer);
+  }, [session?.code]);
   function broadcast(m: NetMessage) {
     conns.current.forEach((c) => c.open && c.send(m));
+  }
+  function disconnectArena(arena: Arena) {
+    const latest = sessionRef.current;
+    if (!latest) return;
+    const connection = arena.peerId ? conns.current.get(arena.peerId) : undefined;
+    if (connection?.open) connection.send({ type: "ARENA_REMOVED", reason: "교사가 이 경기장의 연결을 해제했습니다." });
+    window.setTimeout(() => connection?.close(), 120);
+    const next = structuredClone(latest);
+    delete next.arenas[arena.id];
+    save(next);
   }
   function handle(c: DataConnection, d: NetMessage) {
     const current = sessionRef.current;
@@ -331,18 +368,30 @@ function Teacher({ back }: { back: () => void }) {
     const s = structuredClone(current);
     if (d.type === "REGISTER_ARENA") {
       const arenaId = String(d.arenaId || c.peer);
+      const number = Number(d.number || 0);
+      const occupied = Object.values(s.arenas).find(
+        (arena) => arena.number === number && arena.id !== arenaId && Date.now() - arena.lastSeen <= 30000,
+      );
+      if (occupied) {
+        c.send({ type: "ARENA_NUMBER_REJECTED", number });
+        return;
+      }
+      Object.values(s.arenas)
+        .filter((arena) => arena.number === number && arena.id !== arenaId)
+        .forEach((arena) => delete s.arenas[arena.id]);
       s.arenas[arenaId] = {
         id: arenaId,
-        number: Number(d.number || 0),
+        number,
         status: "ready",
         lastSeen: Date.now(),
+        peerId: c.peer,
       };
       c.send({ type: "WELCOME", session: safeSession(s) });
       save(s);
     }
     if (d.type === "HEARTBEAT") {
       const id = String(d.arenaId || "");
-      if (id && !s.arenas[id]) s.arenas[id] = { id, number: Number(d.number || 0), status: String(d.status || "ready"), lastSeen: Date.now() };
+      if (id && !s.arenas[id]) s.arenas[id] = { id, number: Number(d.number || 0), status: String(d.status || "ready"), lastSeen: Date.now(), peerId: c.peer };
       if (s.arenas[id]) {
         s.arenas[id].lastSeen = Date.now();
         s.arenas[id].status = String(d.status || s.arenas[id].status);
@@ -399,7 +448,7 @@ function Teacher({ back }: { back: () => void }) {
         if (win) {
           win.win++;
           win.games++;
-          win.score += 2;
+          win.score += 3;
         }
         if (lose) {
           lose.loss++;
@@ -496,6 +545,25 @@ function Teacher({ back }: { back: () => void }) {
         </div>
         <div className="timer-display">
           <small>CLASS TIMER</small>
+          <label className="timer-setting">
+            <span>수업 시간</span>
+            <input
+              type="number"
+              min="1"
+              max="120"
+              step="1"
+              disabled={session.status === "running" || session.status === "ended"}
+              value={Math.max(1, Math.round(session.duration / 60000))}
+              onChange={(e) => {
+                const minutes = Math.min(120, Math.max(1, Number(e.target.value) || 1));
+                const s = { ...session, duration: minutes * 60000, startedAt: null };
+                save(s);
+                broadcast({ type: "SESSION_STATE", session: safeSession(s) });
+              }}
+              aria-label="수업 시간(분)"
+            />
+            <em>분</em>
+          </label>
           <b>
             {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
           </b>
@@ -621,10 +689,11 @@ function Teacher({ back }: { back: () => void }) {
               <h2>{session.matches.length}경기 완료</h2>
             </div>
           </div>
-          <div className="match-dashboard-grid"><div className="mini-ranking"><b>플레이어 순위</b>{[...session.players].sort((a,b)=>b.score-a.score).map((p,i)=><div key={p.id}><strong>{i+1}</strong><span>{p.name}</span><small>{p.games}경기</small><em>{p.win}승 {p.loss}패</em></div>)}</div><div className="result-log"><b>게임 결과 로그</b>{session.matches.slice().reverse().map((m)=>{ const winner=session.players.find(p=>p.id===m.playerIds[m.winner]); const loser=session.players.find(p=>p.id===m.playerIds[m.winner===0?1:0]); return <div key={m.matchId}><span><b>{winner?.name}</b> 승리</span><em>VS {loser?.name}</em><small>{m.turns}턴 · {m.counted ? "반영" : "미반영"}</small></div>})}</div></div>
+          <div className="match-dashboard-grid"><div className="mini-ranking"><b>플레이어 순위</b>{[...session.players].sort((a,b)=>b.score-a.score).map((p,i)=><div key={p.id}><strong>{i+1}</strong><span>{p.name}</span><small>{p.games}경기</small><em>{p.win}승 {p.loss}패</em><mark>{p.score}점</mark></div>)}</div><div className="result-log"><b>게임 결과 로그</b>{session.matches.slice().reverse().map((m)=>{ const winner=session.players.find(p=>p.id===m.playerIds[m.winner]); const loser=session.players.find(p=>p.id===m.playerIds[m.winner===0?1:0]); return <div key={m.matchId}><span><b>{winner?.name}</b> 승리</span><em>VS {loser?.name}</em><small>{m.turns}턴 · {m.counted ? "반영" : "미반영"}</small></div>})}</div></div>
+          <p className="score-rule">승점 규칙 · 승리 3점 / 패배 1점</p>
         </article>
       </section>
-      <section className="live-arena-strip"><div className="strip-title"><small>LIVE ARENAS</small><h2>{arenas.length}대 연결</h2></div><div className="arena-card-grid">{arenas.length ? arenas.sort((a,b)=>a.number-b.number).map((a)=><article key={a.id} className={Date.now()-a.lastSeen<25000 ? "connected" : "disconnected"}><strong>{String(a.number).padStart(2,"0")}</strong><b>{a.status === "playing" ? "진행 중" : "대기"}</b><small>{a.players?.map(id=>session.players.find(p=>p.id===id)?.name).join(" VS ") || "플레이어 대기"}</small></article>) : <div className="empty">아직 연결된 경기장이 없습니다.</div>}</div>
+      <section className="live-arena-strip"><div className="strip-title"><small>LIVE ARENAS</small><h2>{arenas.length}대 연결</h2></div><div className="arena-card-grid">{arenas.length ? arenas.sort((a,b)=>a.number-b.number).map((a)=><article key={a.id} className={Date.now()-a.lastSeen<25000 ? "connected" : "disconnected"}><strong>{String(a.number).padStart(2,"0")}</strong><b>{a.status === "playing" ? "진행 중" : "대기"}</b><small>{a.players?.map(id=>session.players.find(p=>p.id===id)?.name).join(" VS ") || "플레이어 대기"}</small><button className="arena-disconnect" onClick={() => disconnectArena(a)}>연결 해제</button></article>) : <div className="empty">아직 연결된 경기장이 없습니다.</div>}</div>
       </section>
       {showResults && (
         <ResultsOverlay session={session} reset={() => { localStorage.removeItem(sessionKey(session.code)); peer.current?.destroy(); back(); }} />
@@ -733,6 +802,18 @@ function ArenaClient({ back }: { back: () => void }) {
           setSession(d.session as ReturnType<typeof safeSession>);
         }
         if (d.type === "MATCH_REJECTED") setNotice(String(d.reason));
+        if (d.type === "ARENA_NUMBER_REJECTED") {
+          setNotice(`경기장 ${d.number}번은 이미 다른 태블릿이 사용 중입니다. 다른 번호를 선택해 주세요.`);
+          setSession(null);
+          setNet("offline");
+          window.setTimeout(() => client.current?.destroy(), 0);
+        }
+        if (d.type === "ARENA_REMOVED") {
+          setNotice(String(d.reason || "교사가 경기장 연결을 해제했습니다."));
+          setSession(null);
+          setNet("offline");
+          window.setTimeout(() => client.current?.destroy(), 0);
+        }
         if (d.type === "MATCH_APPROVED") {
           void audio.setEnabled(true);
           const m = d.match as { matchId: string };
@@ -966,6 +1047,7 @@ function GameBoard({
   const [gallerySide, setGallerySide] = useState<Side | null>(null);
   const [openFlow, setOpenFlow] = useState<SavedFlow | null>(null);
   const [exitConfirm, setExitConfirm] = useState(false);
+  const [rulesAccepted, setRulesAccepted] = useState(false);
   useEffect(() => {
     setLiveEvents((current) => { const next: [Event[], Event[]] = [[...current[0]], [...current[1]]]; next[game.turn] = [...baseFlow]; return next; });
     setSelected(null); setPrisoner(null);
@@ -1105,6 +1187,27 @@ function GameBoard({
           count={game.saved.filter((x) => x.playerId === "1").length}
         />
       </div>
+      {!rulesAccepted && (
+        <div className="game-rules-modal" role="dialog" aria-modal="true" aria-labelledby="game-rules-title">
+          <section>
+            <small>MATCH READY</small>
+            <h2 id="game-rules-title">승리 조건</h2>
+            <div className="win-condition-grid">
+              <article><strong>01</strong><h3>상대의 王 포획</h3><p>상대 왕을 잡는 즉시 승리합니다.</p></article>
+              <article><strong>02</strong><h3>상대 진영에서 생존</h3><p>내 王이 상대의 끝줄에 도착한 뒤 다음 내 턴까지 살아남으면 승리합니다.</p></article>
+            </div>
+            <div className="piece-quick-guide">
+              <b>장기말 기능</b>
+              <span><strong>王(왕)</strong> 모든 방향 1칸</span>
+              <span><strong>將(장)</strong> 상·하·좌·우 1칸</span>
+              <span><strong>相(상)</strong> 대각선 1칸</span>
+              <span><strong>子(자)</strong> 앞 1칸 · 끝줄 도착 시 侯(후)로 승급</span>
+              <span><strong>侯(후)</strong> 뒤쪽 대각선을 제외한 6방향 1칸</span>
+            </div>
+            <button className="rules-start-button" onClick={() => { audio.cue("start"); setRulesAccepted(true); }}>확인 · 게임 시작</button>
+          </section>
+        </div>
+      )}
       {game.winner !== null && (
         <div className="modal match-finish-modal">
           <div className="dialog win finish-summary">

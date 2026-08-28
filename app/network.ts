@@ -23,7 +23,9 @@ export async function connectArena(
   const peer: PeerType = new Peer();
   let conn: DataConnection | null = null;
   let heartbeat: number | undefined;
+  let stopped = false;
   const connect = () => {
+    if (stopped || peer.destroyed) return;
     conn = peer.connect(peerId(code), { reliable: true });
     conn.on("open", () => {
       onState("online");
@@ -35,6 +37,7 @@ export async function connectArena(
     });
     conn.on("data", (d) => onData(d as NetMessage));
     conn.on("close", () => {
+      if (stopped) return;
       onState("reconnecting");
       if (heartbeat) clearInterval(heartbeat);
       setTimeout(connect, 2500);
@@ -49,7 +52,9 @@ export async function connectArena(
     },
     send: (d: NetMessage) => conn?.open && conn.send(d),
     destroy: () => {
+      stopped = true;
       if (heartbeat) clearInterval(heartbeat);
+      conn?.close();
       peer.destroy();
     },
   };
